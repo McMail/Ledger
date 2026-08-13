@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#161D29">
+<title>Ledger — Income & Tax</title>
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="stylesheet" href="css/styles.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+</head>
+<body>
+
+<header class="topbar">
+  <span class="brand">LEDGER</span>
+  <span class="taxyear" id="taxYearLabel">FY 2025–26</span>
+</header>
+
+<main id="app">
+
+  <!-- DASHBOARD -->
+  <section class="view" id="view-dashboard" data-view="dashboard">
+    <div class="month-picker">
+      <button id="prevMonth" aria-label="Previous month">‹</button>
+      <span id="currentMonthLabel">—</span>
+      <button id="nextMonth" aria-label="Next month">›</button>
+    </div>
+
+    <div class="card balances-card">
+      <div class="balance-col">
+        <span class="label">Spending</span>
+        <span class="figure mono" id="balanceSpending">$0.00</span>
+        <span class="hint" id="balanceSpendingAsOf"></span>
+      </div>
+      <div class="balance-divider"></div>
+      <div class="balance-col">
+        <span class="label">Savings</span>
+        <span class="figure mono" id="balanceSavings">$0.00</span>
+        <span class="hint" id="balanceSavingsAsOf"></span>
+      </div>
+    </div>
+
+    <div class="card summary-card">
+      <div class="summary-row main">
+        <span class="label">Income this month</span>
+        <span class="figure mono" id="sumIncome">$0.00</span>
+      </div>
+      <div class="leader"></div>
+      <div class="summary-row">
+        <span class="label">Tax-flagged spend</span>
+        <span class="figure mono" id="sumBusiness">$0.00</span>
+      </div>
+      <div class="leader"></div>
+      <div class="summary-row">
+        <span class="label">Internal transfers excluded</span>
+        <span class="figure mono muted" id="sumTransfers">$0.00</span>
+      </div>
+      <div class="leader"></div>
+      <div class="summary-row">
+        <span class="label">Uncategorised</span>
+        <span class="figure mono muted" id="sumUncat">$0.00</span>
+      </div>
+    </div>
+
+    <div class="card" id="noDataCard" hidden>
+      <p class="empty-state">No statements loaded for this month yet. Go to <strong>Upload</strong> to add a CSV from either account.</p>
+    </div>
+
+    <div class="card warning-card" id="missingMonthsCard" hidden>
+      <p class="empty-state" id="missingMonthsNote"></p>
+    </div>
+
+    <div class="card" id="flaggedCard" hidden>
+      <p class="empty-state" id="flaggedNote"></p>
+    </div>
+
+    <div class="card">
+      <h2>Net cash flow</h2>
+      <div class="summary-row main">
+        <span class="label">Income minus spending</span>
+        <span class="figure mono" id="netCashFlow">$0.00</span>
+      </div>
+      <p class="hint" id="vsLastMonth"></p>
+    </div>
+
+    <div class="card">
+      <h2>By category</h2>
+      <div id="categoryBars" class="bar-list"></div>
+    </div>
+
+    <div class="card">
+      <h2>Top merchants this month</h2>
+      <div id="topMerchants" class="bar-list"></div>
+    </div>
+
+    <div class="card">
+      <h2>At a glance</h2>
+      <div class="stat-grid" id="statGrid"></div>
+    </div>
+  </section>
+
+  <!-- UPLOAD -->
+  <section class="view" id="view-upload" data-view="upload" hidden>
+    <div class="card">
+      <h2>Add a statement</h2>
+      <label class="field">
+        <span>Which account is this CSV from?</span>
+        <select id="accountSelect">
+          <option value="spending">Spending account</option>
+          <option value="savings">Savings account</option>
+        </select>
+      </label>
+      <label class="dropzone" id="dropzone" for="fileInput">
+        <span id="dropzoneText">Tap to choose a CSV file</span>
+        <input type="file" id="fileInput" accept=".csv,text/csv" hidden>
+      </label>
+      <p class="hint" id="uploadHint"></p>
+    </div>
+
+    <div class="card">
+      <h2>Statements on file</h2>
+      <p class="hint">Remove a statement if you uploaded it twice or picked the wrong account — its transactions go with it.</p>
+      <div id="statementList" class="stamped-list"></div>
+    </div>
+  </section>
+
+  <!-- TRANSACTIONS -->
+  <section class="view" id="view-transactions" data-view="transactions" hidden>
+    <div class="filter-bar">
+      <select id="filterAccount">
+        <option value="all">Both accounts</option>
+        <option value="spending">Spending</option>
+        <option value="savings">Savings</option>
+      </select>
+      <select id="filterCategory">
+        <option value="all">All categories</option>
+      </select>
+    </div>
+    <div id="txList" class="tx-list"></div>
+  </section>
+
+  <!-- TAX -->
+  <section class="view" id="view-tax" data-view="tax" hidden>
+    <div class="card">
+      <h2>Estimate this year's tax</h2>
+      <label class="field">
+        <span>Estimated taxable income for the full financial year</span>
+        <input type="number" id="taxableIncomeInput" inputmode="decimal" placeholder="e.g. 78000">
+      </label>
+      <button class="btn-secondary" id="projectIncomeBtn">Project from statements so far</button>
+    </div>
+
+    <div class="card tax-result">
+      <div class="stamp" id="taxStamp">ESTIMATE</div>
+      <div class="summary-row main">
+        <span class="label">Income tax</span>
+        <span class="figure mono" id="taxIncomeTax">$0</span>
+      </div>
+      <div class="leader"></div>
+      <div class="summary-row">
+        <span class="label">Medicare levy (2%)</span>
+        <span class="figure mono" id="taxMedicare">$0</span>
+      </div>
+      <div class="leader"></div>
+      <div class="summary-row">
+        <span class="label">Low Income Tax Offset</span>
+        <span class="figure mono muted" id="taxLito">−$0</span>
+      </div>
+      <div class="leader"></div>
+      <div class="summary-row total">
+        <span class="label">Total payable</span>
+        <span class="figure mono" id="taxTotal">$0</span>
+      </div>
+      <div class="summary-row">
+        <span class="label">Effective rate</span>
+        <span class="figure mono muted" id="taxEffective">0%</span>
+      </div>
+      <p class="hint">General estimate only, resident individual rates, no deductions applied beyond what you've flagged as business. Not tax advice — check with a registered tax agent before lodging.</p>
+    </div>
+
+    <div class="card">
+      <h2>Bracket breakdown</h2>
+      <div id="bracketBreakdown" class="bracket-breakdown"></div>
+    </div>
+
+    <div class="card" id="taxDeductibleCard">
+      <p class="hint" id="taxDeductibleNote"></p>
+    </div>
+  </section>
+
+  <!-- SETTINGS -->
+  <section class="view" id="view-settings" data-view="settings" hidden>
+    <div class="card">
+      <h2>Large purchase flagging</h2>
+      <p class="hint">Any debit at or above this amount is auto-flagged as a possible business expense, unless it matches a whitelist keyword below.</p>
+      <label class="field">
+        <span>Threshold</span>
+        <input type="number" id="largeAmountThreshold" inputmode="decimal">
+      </label>
+    </div>
+
+    <div class="card">
+      <h2>Personal whitelist</h2>
+      <p class="hint">Descriptions matching these are always personal, even above the threshold — e.g. your usual fuel stop. One per line.</p>
+      <textarea id="whitelistKeywords" rows="4" placeholder="7-ELEVEN&#10;BP CNTRL&#10;AMPOL"></textarea>
+    </div>
+
+    <div class="card">
+      <h2>Business keywords</h2>
+      <p class="hint">Transactions whose description contains any of these are auto-flagged as business, regardless of amount. One per line.</p>
+      <textarea id="businessKeywords" rows="5"></textarea>
+    </div>
+
+    <button class="btn-secondary" id="saveRulesBtn">Save flagging rules</button>
+
+    <div class="card" style="margin-top:16px">
+      <h2>Categories</h2>
+      <p class="hint">Add your own categories (e.g. "Groceries", "Fuel") to tag transactions with in the Transactions tab. The five built-in categories can't be removed.</p>
+      <div id="categoryManagerList" class="stamped-list"></div>
+      <div class="add-category-row">
+        <input type="text" id="newCategoryInput" placeholder="New category name">
+        <button class="btn-secondary" id="addCategoryBtn">Add</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Data</h2>
+      <button class="btn-secondary" id="exportBtn">Export all data (JSON)</button>
+      <button class="btn-danger" id="resetBtn">Erase all local data</button>
+    </div>
+  </section>
+
+</main>
+
+<nav class="tabbar">
+  <button class="tab" data-target="dashboard" aria-label="Dashboard">
+    <span class="tab-icon">▤</span><span>Dashboard</span>
+  </button>
+  <button class="tab" data-target="transactions" aria-label="Transactions">
+    <span class="tab-icon">≡</span><span>Transactions</span>
+  </button>
+  <button class="tab" data-target="upload" aria-label="Upload">
+    <span class="tab-icon">＋</span><span>Upload</span>
+  </button>
+  <button class="tab" data-target="tax" aria-label="Tax">
+    <span class="tab-icon">%</span><span>Tax</span>
+  </button>
+  <button class="tab" data-target="settings" aria-label="Settings">
+    <span class="tab-icon">⚙</span><span>Settings</span>
+  </button>
+</nav>
+
+<script src="js/db.js"></script>
+<script src="js/csvParser.js"></script>
+<script src="js/categorizer.js"></script>
+<script src="js/taxCalculator.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
