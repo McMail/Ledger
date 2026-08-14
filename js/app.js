@@ -259,7 +259,11 @@
   // ---------- Upload ----------
   const dropzone = $('#dropzone');
   const fileInput = $('#fileInput');
-  dropzone.addEventListener('click', () => fileInput.click());
+  // The label wraps the input, so clicking it already opens the file picker
+  // natively — no need to (and must not) call fileInput.click() ourselves.
+  // Doing so double-fires the picker: on desktop it silently eats your first
+  // selection, and on iOS Safari the second programmatic click isn't a
+  // trusted gesture, so the picker never opens at all.
   fileInput.addEventListener('change', async () => {
     const file = fileInput.files[0];
     if (!file) return;
